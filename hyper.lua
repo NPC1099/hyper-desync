@@ -1,7 +1,7 @@
 --[[
-    HYPER'S HUB V7 - PERSISTENT GHOSTING
-    Visual: Black & Neon Concept
-    Fix: Ghost Displacement & Auto-Respawn
+    HYPER'S HUB V8 - REAL CLONE DESYNC
+    Lógica: Forced Instancing & Network Projection
+    Visual: Black Hub / Real Ghost
 ]]
 
 local RunService = game:GetService("RunService")
@@ -10,9 +10,9 @@ local LocalPlayer = Players.LocalPlayer
 
 local Hyper = {
     Active = false,
-    Intensity = 40,
-    GhostOffset = 0.07, -- Aumentado para o clone se afastar mais do corpo
-    Smoothing = 0.18,
+    Intensity = 45,
+    GhostDistance = 6, -- Distância real de separação do clone
+    Smoothing = 0.1,
     GhostColor = Color3.fromRGB(0, 150, 255)
 }
 
@@ -21,35 +21,43 @@ local state = {
     currentVelo = Vector3.new(0, 0, 0)
 }
 
--- [ FUNÇÃO DE CRIAÇÃO DO CLONE ]
-local function createGhost()
+-- [ FUNÇÃO DE CLONAGEM REAL ]
+local function createRealGhost()
     if state.ghostModel then state.ghostModel:Destroy() end
+    
     local char = LocalPlayer.Character
-    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    if not char then return end
     
     char.Archivable = true
     local ghost = char:Clone()
     char.Archivable = false
-    ghost.Name = "HyperGhost_V7"
+    ghost.Name = "HyperGhost_Real"
     
+    -- Limpeza e configuração do material
     for _, v in ipairs(ghost:GetDescendants()) do
         if v:IsA("BasePart") then
             v.Anchored = true
             v.CanCollide = false
-            v.Transparency = 0.6
-            v.Material = Enum.Material.ForceField
+            v.CastShadow = false
+            v.Transparency = 0.5
+            v.Material = Enum.Material.Neon
             v.Color = Hyper.GhostColor
-        elseif v:IsA("Script") or v:IsA("LocalScript") or v:IsA("Animator") or v:IsA("Humanoid") then
+        elseif v:IsA("Script") or v:IsA("LocalScript") or v:IsA("Humanoid") or v:IsA("Highlight") then
             v:Destroy()
         end
     end
     
-    local hl = Instance.new("Highlight", ghost)
+    -- Efeito de visibilidade total
+    local hl = Instance.new("Highlight")
     hl.FillColor = Hyper.GhostColor
     hl.OutlineColor = Color3.new(1, 1, 1)
+    hl.FillTransparency = 0.5
+    hl.OutlineTransparency = 0
     hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    hl.Parent = ghost
     
-    ghost.Parent = game.Workspace.Terrain
+    -- O Ghost deve ficar no Workspace, mas fora do seu modelo
+    ghost.Parent = workspace
     state.ghostModel = ghost
 end
 
@@ -67,9 +75,7 @@ Main.BackgroundColor3 = Color3.new(0,0,0)
 Main.Draggable = true
 Main.Active = true
 Instance.new("UICorner", Main)
-local Stroke = Instance.new("UIStroke", Main)
-Stroke.Color = Color3.fromRGB(50, 50, 50)
-Stroke.Thickness = 2
+Instance.new("UIStroke", Main).Color = Color3.fromRGB(60, 60, 60)
 
 local Title = Instance.new("TextLabel", Main)
 Title.Size = UDim2.new(1, 0, 0, 40)
@@ -99,9 +105,9 @@ Instance.new("UICorner", OffBtn)
 
 OnBtn.MouseButton1Click:Connect(function()
     Hyper.Active = true
-    OnBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 50)
+    OnBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 80)
     OffBtn.BackgroundColor3 = Color3.fromRGB(40, 0, 0)
-    createGhost()
+    createRealGhost()
 end)
 
 OffBtn.MouseButton1Click:Connect(function()
@@ -111,44 +117,26 @@ OffBtn.MouseButton1Click:Connect(function()
     if state.ghostModel then state.ghostModel:Destroy(); state.ghostModel = nil end
 end)
 
--- [ MOTOR DE FÍSICA E ATUALIZAÇÃO DO GHOST ]
+-- [ MOTOR DE DESYNC REAL ]
 RunService.Heartbeat:Connect(function()
     local char = LocalPlayer.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
-    local hum = char and char:FindFirstChild("Humanoid")
     
-    if Hyper.Active and root and hum then
-        -- Verificação de integridade do Ghost
+    if Hyper.Active and root then
+        -- Garantir que o Ghost existe
         if not state.ghostModel or not state.ghostModel.Parent then
-            createGhost()
+            createRealGhost()
         end
 
         local t = tick()
-        local moveVelocity = hum.MoveDirection * hum.WalkSpeed
         
-        -- Cálculo de Desync (Vetor de deslocamento circular)
-        local desyncVelo = Vector3.new(
-            math.sin(t * 15) * Hyper.Intensity, 
+        -- Gerar um vetor de Desync que realmente se afasta
+        -- Em vez de girar rápido, ele oscila em uma posição fixa falsa
+        local desyncPos = Vector3.new(
+            math.sin(t * 3) * Hyper.GhostDistance, 
             0, 
-            math.cos(t * 15) * Hyper.Intensity
+            math.cos(t * 3) * Hyper.GhostDistance
         )
         
-        state.currentVelo = state.currentVelo:Lerp(desyncVelo, Hyper.Smoothing)
-        local oldV = root.AssemblyLinearVelocity
-        
-        -- Aplica a velocidade "mentirosa" para o servidor
-        root.AssemblyLinearVelocity = state.currentVelo + moveVelocity
-        
-        -- ATUALIZAÇÃO DE POSIÇÃO DO CLONE (Faz ele se mover de verdade)
-        if state.ghostModel then
-            local gRoot = state.ghostModel:FindFirstChild("HumanoidRootPart")
-            if gRoot then
-                -- O Clone agora se desloca fisicamente para onde o servidor te vê
-                gRoot.CFrame = root.CFrame * CFrame.new(state.currentVelo * Hyper.GhostOffset)
-            end
-        end
-        
-        RunService.RenderStepped:Wait()
-        root.AssemblyLinearVelocity = oldV
-    end
-end)
+        -- Manip
+            

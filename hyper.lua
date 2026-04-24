@@ -1,56 +1,46 @@
 --[[
-    HYPER'S DESYNC - BLACK EDITION (V2.1)
-    Visual: Black Hub / Dark Theme
-    Funcionalidade: Ghosting + Orbital Physics + Desync
-    Otimização: SUNC 100% (Madium / 2026)
+    HYPER'S DESYNC V3 - FULL FUNCTIONAL
+    Lógica: Network Velocity Manipulation + Dynamic Ghosting
+    Status: Revisado para 23 de Abril de 2026
 ]]
 
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
--- Parâmetros de Configuração
 local HyperSettings = {
     Active = false,
-    Intensity = 36,
-    Smoothing = 0.12,
-    GhostColor = Color3.fromRGB(0, 150, 255), -- Azul Neon para contraste no preto
-    HubColor = Color3.fromRGB(0, 0, 0),       -- PRETO ABSOLUTO
-    AccentColor = Color3.fromRGB(40, 40, 40)  -- Grafite para bordas
+    Intensity = 42,        -- Força da dessincronização
+    Smoothing = 0.15,      -- Suavidade do movimento
+    VisualOffset = 0.06,   -- Distância do Ghost
+    GhostColor = Color3.fromRGB(0, 150, 255)
 }
 
 local state = {
     ghostModel = nil,
-    currentVelo = Vector3.new(0,0,0)
+    currentVelo = Vector3.new(0, 0, 0),
+    connection = nil
 }
 
--- [ SISTEMA DE LIMPEZA ]
-local function cleanup()
+-- [ FUNÇÃO DE GHOST DINÂMICO ]
+local function createDynamicGhost()
     if state.ghostModel then state.ghostModel:Destroy() end
-    for _, v in pairs(workspace:GetChildren()) do
-        if v.Name == "HyperMarker" then v:Destroy() end
-    end
-end
-
--- [ SISTEMA DE GHOSTING ]
-local function createHyperGhost()
-    cleanup()
     local char = LocalPlayer.Character
     if not char then return end
     
     char.Archivable = true
     local ghost = char:Clone()
     char.Archivable = false
-    ghost.Name = "HyperGhost"
+    ghost.Name = "HyperGhost_Dynamic"
     
     for _, v in ipairs(ghost:GetDescendants()) do
         if v:IsA("BasePart") then
             v.Anchored = true
             v.CanCollide = false
+            v.Transparency = 0.7
             v.Material = Enum.Material.ForceField
             v.Color = HyperSettings.GhostColor
-            v.Transparency = 0.6
-        elseif v:IsA("Script") or v:IsA("LocalScript") or v:IsA("Humanoid") then
+        elseif v:IsA("Script") or v:IsA("LocalScript") or v:IsA("Humanoid") or v:IsA("Highlight") then
             v:Destroy()
         end
     end
@@ -66,88 +56,75 @@ end
 
 -- [ INTERFACE BLACK HUB ]
 local GuiParent = (gethui and gethui()) or game:GetService("CoreGui")
-if GuiParent:FindFirstChild("HyperDesyncHub") then GuiParent.HyperDesyncHub:Destroy() end
+if GuiParent:FindFirstChild("HyperHubV3") then GuiParent.HyperHubV2:Destroy() end
 
 local ScreenGui = Instance.new("ScreenGui", GuiParent)
-ScreenGui.Name = "HyperDesyncHub"
+ScreenGui.Name = "HyperHubV3"
 
 local MainFrame = Instance.new("Frame", ScreenGui)
 MainFrame.Size = UDim2.new(0, 180, 0, 90)
-MainFrame.Position = UDim2.new(0.5, -90, 0.82, 0)
-MainFrame.BackgroundColor3 = HyperSettings.HubColor
-MainFrame.BorderSizePixel = 0
+MainFrame.Position = UDim2.new(0.5, -90, 0.8, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(0,0,0)
 MainFrame.Active = true
 MainFrame.Draggable = true
-
--- Detalhes Visuais (Bordas e Cantos)
-local Corner = Instance.new("UICorner", MainFrame)
-Corner.CornerRadius = UDim.new(0, 6)
-
-local Stroke = Instance.new("UIStroke", MainFrame)
-Stroke.Color = HyperSettings.AccentColor
-Stroke.Thickness = 1.5
-
-local Title = Instance.new("TextLabel", MainFrame)
-Title.Size = UDim2.new(1, 0, 0, 35)
-Title.Text = "HYPER'S DESYNC"
-Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.Font = Enum.Font.GothamBold
-Title.TextSize = 13
-Title.BackgroundTransparency = 1
+Instance.new("UICorner", MainFrame)
+Instance.new("UIStroke", MainFrame).Color = Color3.fromRGB(40,40,40)
 
 local ToggleBtn = Instance.new("TextButton", MainFrame)
-ToggleBtn.Size = UDim2.new(0.85, 0, 0, 35)
-ToggleBtn.Position = UDim2.new(0.075, 0, 0.45, 0)
-ToggleBtn.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-ToggleBtn.Text = "STATUS: OFF"
-ToggleBtn.TextColor3 = Color3.fromRGB(180, 180, 180)
+ToggleBtn.Size = UDim2.new(0.85, 0, 0, 40)
+ToggleBtn.Position = UDim2.new(0.075, 0, 0.35, 0)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(15,15,15)
+ToggleBtn.Text = "DESYNC: OFF"
+ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 ToggleBtn.Font = Enum.Font.Code
-ToggleBtn.TextSize = 12
+Instance.new("UICorner", ToggleBtn)
 
-local BtnCorner = Instance.new("UICorner", ToggleBtn)
-local BtnStroke = Instance.new("UIStroke", ToggleBtn)
-BtnStroke.Color = Color3.fromRGB(30, 30, 30)
-
--- [ LÓGICA OPERACIONAL ]
+-- [ LÓGICA DE EXECUÇÃO REAL ]
 ToggleBtn.MouseButton1Click:Connect(function()
     HyperSettings.Active = not HyperSettings.Active
     if HyperSettings.Active then
-        ToggleBtn.Text = "STATUS: ON"
+        ToggleBtn.Text = "DESYNC: ON"
         ToggleBtn.TextColor3 = Color3.fromRGB(0, 255, 150)
-        BtnStroke.Color = Color3.fromRGB(0, 150, 80)
-        createHyperGhost()
+        createDynamicGhost()
     else
-        ToggleBtn.Text = "STATUS: OFF"
-        ToggleBtn.TextColor3 = Color3.fromRGB(180, 180, 180)
-        BtnStroke.Color = Color3.fromRGB(30, 30, 30)
-        cleanup()
+        ToggleBtn.Text = "DESYNC: OFF"
+        ToggleBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
+        if state.ghostModel then state.ghostModel:Destroy() end
     end
 end)
 
+-- LOOP PRINCIPAL DE MANIPULAÇÃO DE REDE (NETWORK)
 RunService.Heartbeat:Connect(function()
     local char = LocalPlayer.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
     
-    if root and HyperSettings.Active then
-        local t = tick()
-        local targetVelo = Vector3.new(math.sin(t * 11) * HyperSettings.Intensity, 0, math.cos(t * 11) * HyperSettings.Intensity)
+    if HyperSettings.Active and root then
+        -- 1. Manipulação de Velocidade (A alma do Desync)
+        -- Geramos um vetor de força que o servidor tenta rastrear, mas o cliente ignora
+        local t = tick() * 14 -- Frequência de oscilação
+        local targetVelo = Vector3.new(math.sin(t) * HyperSettings.Intensity, 0, math.cos(t) * HyperSettings.Intensity)
+        
         state.currentVelo = state.currentVelo:Lerp(targetVelo, HyperSettings.Smoothing)
         
         local oldV = root.AssemblyLinearVelocity
+        
+        -- Injetamos a velocidade falsa no frame de física
         root.AssemblyLinearVelocity = state.currentVelo
         
+        -- 2. Atualização DYNAMICA do Ghost
         if state.ghostModel then
             local gRoot = state.ghostModel:FindFirstChild("HumanoidRootPart")
             if gRoot then
-                -- Atualiza a posição do Fantasma com base no Desync de rede
-                gRoot.CFrame = root.CFrame * CFrame.new(state.currentVelo * 0.055)
+                -- O Ghost agora segue o jogador com interpolação de rede
+                -- Ele mostra onde sua hitbox está sendo "jogada" pelo desync
+                gRoot.CFrame = root.CFrame * CFrame.new(state.currentVelo * HyperSettings.VisualOffset)
             end
         end
         
+        -- Sincronia de Renderização (Obrigatório para o Madium não crashar)
         RunService.RenderStepped:Wait()
+        
+        -- Resetamos localmente para você não sair voando na sua tela
         root.AssemblyLinearVelocity = oldV
     end
 end)
-
-print("Hyper's Desync: Black Edition carregada com sucesso.")
-

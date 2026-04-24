@@ -1,130 +1,184 @@
 --[[
-    HYPER'S DESYNC V3 - FULL FUNCTIONAL
-    Lógica: Network Velocity Manipulation + Dynamic Ghosting
-    Status: Revisado para 23 de Abril de 2026
+    HYPER'S DESYNC V4 - RAKNET & ORBITAL EDITION
+    Fins Educacionais: Manipulação de Pacotes (0x1B) e Estética Trigonométrica
+    Visual: Black Hub / Blue Electricity / RakNet Hooking
 ]]
 
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 
-local HyperSettings = {
+-- Parâmetros de Baixo Nível e Visual
+local Hyper = {
     Active = false,
-    Intensity = 42,        -- Força da dessincronização
-    Smoothing = 0.15,      -- Suavidade do movimento
-    VisualOffset = 0.06,   -- Distância do Ghost
-    GhostColor = Color3.fromRGB(0, 150, 255)
+    Intensity = 45,
+    PacketId = 0x1B, -- Pacote de Física Bruta
+    OuterRadius = 3.5,
+    InnerRadius = 2.0,
+    OrbitalSpeed = 2.8,
+    GhostColor = Color3.fromRGB(0, 100, 255)
 }
 
 local state = {
     ghostModel = nil,
+    vfxConn = nil,
+    hooked = false,
     currentVelo = Vector3.new(0, 0, 0),
-    connection = nil
+    orbitalParts = {}
 }
 
--- [ FUNÇÃO DE GHOST DINÂMICO ]
-local function createDynamicGhost()
-    if state.ghostModel then state.ghostModel:Destroy() end
+-- [ 1. GERENCIAMENTO DE MEMÓRIA E LIMPEZA ROBUSTA ]
+local function cleanup()
+    if state.vfxConn then state.vfxConn:Disconnect(); state.vfxConn = nil end
+    if state.ghostModel then state.ghostModel:Destroy(); state.ghostModel = nil end
+    
+    for _, part in ipairs(state.orbitalParts) do
+        if part then part:Destroy() end
+    end
+    state.orbitalParts = {}
+    
+    if state.hooked and raknet then
+        raknet.remove_send_hook()
+        state.hooked = false
+    end
+end
+
+-- [ 2. MANIPULAÇÃO DE BAIXO NÍVEL (RAKNET HOOK) ]
+local function raknet_hook(packet)
+    if packet.PacketId == Hyper.PacketId and Hyper.Active then
+        local buf = packet.AsBuffer
+        -- Sobrescreve o timestamp para criar lag artificial controlado
+        buffer.writeu32(buf, 1, 0xFFFFFFFF)
+        packet:SetData(buf)
+    end
+end
+
+-- [ 3. COMPLEXIDADE VISUAL E MATEMÁTICA (ORBITAL) ]
+local function createOrbitalEffect(pos)
+    local rCount = 24
+    for i = 1, rCount do
+        local dot = Instance.new("Part")
+        dot.Size = Vector3.new(0.2, 0.2, 0.2)
+        dot.Shape = Enum.PartType.Ball
+        dot.Material = Enum.Material.Neon
+        dot.Color = Hyper.GhostColor
+        dot.Anchored = true
+        dot.CanCollide = false
+        dot.Parent = workspace
+        
+        local att = Instance.new("Attachment", dot)
+        local em = Instance.new("ParticleEmitter", att)
+        em.Color = ColorSequence.new(Hyper.GhostColor, Color3.new(1,1,1))
+        em.Size = NumberSequence.new(0.1, 0)
+        em.Lifetime = NumberRange.new(0.2, 0.4)
+        em.Rate = 5
+        
+        table.insert(state.orbitalParts, dot)
+    end
+end
+
+local function createGhost()
+    cleanup()
     local char = LocalPlayer.Character
-    if not char then return end
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
     
     char.Archivable = true
     local ghost = char:Clone()
     char.Archivable = false
-    ghost.Name = "HyperGhost_Dynamic"
+    ghost.Name = "HyperGhost_RakNet"
     
+    -- Limpeza Profunda (Performance Elevada)
     for _, v in ipairs(ghost:GetDescendants()) do
         if v:IsA("BasePart") then
             v.Anchored = true
             v.CanCollide = false
             v.Transparency = 0.7
             v.Material = Enum.Material.ForceField
-            v.Color = HyperSettings.GhostColor
-        elseif v:IsA("Script") or v:IsA("LocalScript") or v:IsA("Humanoid") or v:IsA("Highlight") then
+            v.Color = Hyper.GhostColor
+        elseif v:IsA("Script") or v:IsA("LocalScript") or v:IsA("Animator") or v:IsA("Humanoid") then
             v:Destroy()
         end
     end
     
     local hl = Instance.new("Highlight", ghost)
-    hl.FillColor = HyperSettings.GhostColor
-    hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+    hl.FillColor = Hyper.GhostColor
     hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
     
     ghost.Parent = game.Workspace.Terrain
     state.ghostModel = ghost
+    createOrbitalEffect(char.HumanoidRootPart.Position)
 end
 
--- [ INTERFACE BLACK HUB ]
+-- [ 4. HUB PROFISSIONAL - BLACK EDITION ]
 local GuiParent = (gethui and gethui()) or game:GetService("CoreGui")
-if GuiParent:FindFirstChild("HyperHubV3") then GuiParent.HyperHubV2:Destroy() end
-
 local ScreenGui = Instance.new("ScreenGui", GuiParent)
-ScreenGui.Name = "HyperHubV3"
+ScreenGui.Name = "HyperDesync_Rak"
 
-local MainFrame = Instance.new("Frame", ScreenGui)
-MainFrame.Size = UDim2.new(0, 180, 0, 90)
-MainFrame.Position = UDim2.new(0.5, -90, 0.8, 0)
-MainFrame.BackgroundColor3 = Color3.fromRGB(0,0,0)
-MainFrame.Active = true
-MainFrame.Draggable = true
-Instance.new("UICorner", MainFrame)
-Instance.new("UIStroke", MainFrame).Color = Color3.fromRGB(40,40,40)
+local Main = Instance.new("Frame", ScreenGui)
+Main.Size = UDim2.new(0, 190, 0, 95)
+Main.Position = UDim2.new(0.5, -95, 0.8, 0)
+Main.BackgroundColor3 = Color3.new(0,0,0)
+Main.Draggable = true
+Main.Active = true
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 10)
+Instance.new("UIStroke", Main).Color = Color3.fromRGB(35,35,35)
 
-local ToggleBtn = Instance.new("TextButton", MainFrame)
-ToggleBtn.Size = UDim2.new(0.85, 0, 0, 40)
-ToggleBtn.Position = UDim2.new(0.075, 0, 0.35, 0)
-ToggleBtn.BackgroundColor3 = Color3.fromRGB(15,15,15)
-ToggleBtn.Text = "DESYNC: OFF"
-ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToggleBtn.Font = Enum.Font.Code
-Instance.new("UICorner", ToggleBtn)
+local Btn = Instance.new("TextButton", Main)
+Btn.Size = UDim2.new(0.85, 0, 0, 40)
+Btn.Position = UDim2.new(0.075, 0, 0.4, 0)
+Btn.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
+Btn.Text = "RAKNET DESYNC: OFF"
+Btn.TextColor3 = Color3.new(1,1,1)
+Btn.Font = Enum.Font.Code
+Instance.new("UICorner", Btn)
 
--- [ LÓGICA DE EXECUÇÃO REAL ]
-ToggleBtn.MouseButton1Click:Connect(function()
-    HyperSettings.Active = not HyperSettings.Active
-    if HyperSettings.Active then
-        ToggleBtn.Text = "DESYNC: ON"
-        ToggleBtn.TextColor3 = Color3.fromRGB(0, 255, 150)
-        createDynamicGhost()
+-- Lógica de Interpolação e Loops
+Btn.MouseButton1Click:Connect(function()
+    Hyper.Active = not Hyper.Active
+    if Hyper.Active then
+        Btn.Text = "RAKNET DESYNC: ON"
+        Btn.TextColor3 = Color3.fromRGB(0, 200, 255)
+        createGhost()
+        if raknet then raknet.add_send_hook(raknet_hook); state.hooked = true end
     else
-        ToggleBtn.Text = "DESYNC: OFF"
-        ToggleBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
-        if state.ghostModel then state.ghostModel:Destroy() end
+        Btn.Text = "RAKNET DESYNC: OFF"
+        Btn.TextColor3 = Color3.new(1,1,1)
+        cleanup()
     end
 end)
 
--- LOOP PRINCIPAL DE MANIPULAÇÃO DE REDE (NETWORK)
-RunService.Heartbeat:Connect(function()
+RunService.Heartbeat:Connect(function(dt)
     local char = LocalPlayer.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
     
-    if HyperSettings.Active and root then
-        -- 1. Manipulação de Velocidade (A alma do Desync)
-        -- Geramos um vetor de força que o servidor tenta rastrear, mas o cliente ignora
-        local t = tick() * 14 -- Frequência de oscilação
-        local targetVelo = Vector3.new(math.sin(t) * HyperSettings.Intensity, 0, math.cos(t) * HyperSettings.Intensity)
+    if Hyper.Active and root then
+        local t = tick()
         
-        state.currentVelo = state.currentVelo:Lerp(targetVelo, HyperSettings.Smoothing)
+        -- Cálculo Trigonométrico para Desync e Orbitals
+        local veloX = math.sin(t * 12) * Hyper.Intensity
+        local veloZ = math.cos(t * 12) * Hyper.Intensity
+        state.currentVelo = state.currentVelo:Lerp(Vector3.new(veloX, 0, veloZ), 0.15)
         
-        local oldV = root.AssemblyLinearVelocity
-        
-        -- Injetamos a velocidade falsa no frame de física
         root.AssemblyLinearVelocity = state.currentVelo
         
-        -- 2. Atualização DYNAMICA do Ghost
+        -- Atualização Dinâmica do Ghost e Anéis
         if state.ghostModel then
             local gRoot = state.ghostModel:FindFirstChild("HumanoidRootPart")
             if gRoot then
-                -- O Ghost agora segue o jogador com interpolação de rede
-                -- Ele mostra onde sua hitbox está sendo "jogada" pelo desync
-                gRoot.CFrame = root.CFrame * CFrame.new(state.currentVelo * HyperSettings.VisualOffset)
+                gRoot.CFrame = root.CFrame * CFrame.new(state.currentVelo * 0.05)
+                
+                -- Movimento dos Anéis Orbitais (Trigonometria Pura)
+                for i, dot in ipairs(state.orbitalParts) do
+                    local angle = (i / #state.orbitalParts) * math.pi * 2 + (t * Hyper.OrbitalSpeed)
+                    local x = math.cos(angle) * Hyper.OuterRadius
+                    local z = math.sin(angle) * Hyper.OuterRadius
+                    dot.CFrame = gRoot.CFrame * CFrame.new(x, -3, z)
+                end
             end
         end
         
-        -- Sincronia de Renderização (Obrigatório para o Madium não crashar)
         RunService.RenderStepped:Wait()
-        
-        -- Resetamos localmente para você não sair voando na sua tela
-        root.AssemblyLinearVelocity = oldV
+        root.AssemblyLinearVelocity = Vector3.new(0,0,0)
     end
 end)

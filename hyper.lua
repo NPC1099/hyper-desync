@@ -1,99 +1,45 @@
 --[[
-    HYPER'S DESYNC V4 - RAKNET & ORBITAL EDITION
-    Fins Educacionais: Manipulação de Pacotes (0x1B) e Estética Trigonométrica
-    Visual: Black Hub / Blue Electricity / RakNet Hooking
+    HYPER'S HUB V6 - PREDICTOR EDITION
+    Visual: Black & Neon Concept
+    Sistemas: RakNet Physics + Dynamic Ghosting
 ]]
 
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 
--- Parâmetros de Baixo Nível e Visual
 local Hyper = {
     Active = false,
-    Intensity = 45,
-    PacketId = 0x1B, -- Pacote de Física Bruta
-    OuterRadius = 3.5,
-    InnerRadius = 2.0,
-    OrbitalSpeed = 2.8,
-    GhostColor = Color3.fromRGB(0, 100, 255)
+    Intensity = 38,
+    GhostOffset = 0.05,
+    Smoothing = 0.2,
+    GhostColor = Color3.fromRGB(0, 150, 255)
 }
 
 local state = {
     ghostModel = nil,
-    vfxConn = nil,
-    hooked = false,
-    currentVelo = Vector3.new(0, 0, 0),
-    orbitalParts = {}
+    currentVelo = Vector3.new(0, 0, 0)
 }
 
--- [ 1. GERENCIAMENTO DE MEMÓRIA E LIMPEZA ROBUSTA ]
+-- [ LIMPEZA ]
 local function cleanup()
-    if state.vfxConn then state.vfxConn:Disconnect(); state.vfxConn = nil end
     if state.ghostModel then state.ghostModel:Destroy(); state.ghostModel = nil end
-    
-    for _, part in ipairs(state.orbitalParts) do
-        if part then part:Destroy() end
-    end
-    state.orbitalParts = {}
-    
-    if state.hooked and raknet then
-        raknet.remove_send_hook()
-        state.hooked = false
-    end
 end
 
--- [ 2. MANIPULAÇÃO DE BAIXO NÍVEL (RAKNET HOOK) ]
-local function raknet_hook(packet)
-    if packet.PacketId == Hyper.PacketId and Hyper.Active then
-        local buf = packet.AsBuffer
-        -- Sobrescreve o timestamp para criar lag artificial controlado
-        buffer.writeu32(buf, 1, 0xFFFFFFFF)
-        packet:SetData(buf)
-    end
-end
-
--- [ 3. COMPLEXIDADE VISUAL E MATEMÁTICA (ORBITAL) ]
-local function createOrbitalEffect(pos)
-    local rCount = 24
-    for i = 1, rCount do
-        local dot = Instance.new("Part")
-        dot.Size = Vector3.new(0.2, 0.2, 0.2)
-        dot.Shape = Enum.PartType.Ball
-        dot.Material = Enum.Material.Neon
-        dot.Color = Hyper.GhostColor
-        dot.Anchored = true
-        dot.CanCollide = false
-        dot.Parent = workspace
-        
-        local att = Instance.new("Attachment", dot)
-        local em = Instance.new("ParticleEmitter", att)
-        em.Color = ColorSequence.new(Hyper.GhostColor, Color3.new(1,1,1))
-        em.Size = NumberSequence.new(0.1, 0)
-        em.Lifetime = NumberRange.new(0.2, 0.4)
-        em.Rate = 5
-        
-        table.insert(state.orbitalParts, dot)
-    end
-end
-
+-- [ GHOST ]
 local function createGhost()
     cleanup()
     local char = LocalPlayer.Character
-    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-    
+    if not char then return end
     char.Archivable = true
     local ghost = char:Clone()
     char.Archivable = false
-    ghost.Name = "HyperGhost_RakNet"
     
-    -- Limpeza Profunda (Performance Elevada)
     for _, v in ipairs(ghost:GetDescendants()) do
         if v:IsA("BasePart") then
             v.Anchored = true
             v.CanCollide = false
-            v.Transparency = 0.7
+            v.Transparency = 0.6
             v.Material = Enum.Material.ForceField
             v.Color = Hyper.GhostColor
         elseif v:IsA("Script") or v:IsA("LocalScript") or v:IsA("Animator") or v:IsA("Humanoid") then
@@ -104,81 +50,95 @@ local function createGhost()
     local hl = Instance.new("Highlight", ghost)
     hl.FillColor = Hyper.GhostColor
     hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    
     ghost.Parent = game.Workspace.Terrain
     state.ghostModel = ghost
-    createOrbitalEffect(char.HumanoidRootPart.Position)
 end
 
--- [ 4. HUB PROFISSIONAL - BLACK EDITION ]
+-- [ INTERFACE HYPER'S HUB ]
 local GuiParent = (gethui and gethui()) or game:GetService("CoreGui")
+if GuiParent:FindFirstChild("HypersHub") then GuiParent.HypersHub:Destroy() end
+
 local ScreenGui = Instance.new("ScreenGui", GuiParent)
-ScreenGui.Name = "HyperDesync_Rak"
+ScreenGui.Name = "HypersHub"
 
 local Main = Instance.new("Frame", ScreenGui)
-Main.Size = UDim2.new(0, 190, 0, 95)
-Main.Position = UDim2.new(0.5, -95, 0.8, 0)
+Main.Size = UDim2.new(0, 200, 0, 130)
+Main.Position = UDim2.new(0.5, -100, 0.8, 0)
 Main.BackgroundColor3 = Color3.new(0,0,0)
-Main.Draggable = true
 Main.Active = true
-Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 10)
-Instance.new("UIStroke", Main).Color = Color3.fromRGB(35,35,35)
+Main.Draggable = true
+Instance.new("UICorner", Main)
+local Stroke = Instance.new("UIStroke", Main)
+Stroke.Color = Color3.fromRGB(40, 40, 40)
+Stroke.Thickness = 2
 
-local Btn = Instance.new("TextButton", Main)
-Btn.Size = UDim2.new(0.85, 0, 0, 40)
-Btn.Position = UDim2.new(0.075, 0, 0.4, 0)
-Btn.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
-Btn.Text = "RAKNET DESYNC: OFF"
-Btn.TextColor3 = Color3.new(1,1,1)
-Btn.Font = Enum.Font.Code
-Instance.new("UICorner", Btn)
+local Title = Instance.new("TextLabel", Main)
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.Text = "HYPER'S HUB"
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 16
+Title.BackgroundTransparency = 1
 
--- Lógica de Interpolação e Loops
-Btn.MouseButton1Click:Connect(function()
-    Hyper.Active = not Hyper.Active
-    if Hyper.Active then
-        Btn.Text = "RAKNET DESYNC: ON"
-        Btn.TextColor3 = Color3.fromRGB(0, 200, 255)
-        createGhost()
-        if raknet then raknet.add_send_hook(raknet_hook); state.hooked = true end
-    else
-        Btn.Text = "RAKNET DESYNC: OFF"
-        Btn.TextColor3 = Color3.new(1,1,1)
-        cleanup()
-    end
+-- Botão ON
+local OnBtn = Instance.new("TextButton", Main)
+OnBtn.Size = UDim2.new(0.4, 0, 0, 40)
+OnBtn.Position = UDim2.new(0.07, 0, 0.45, 0)
+OnBtn.BackgroundColor3 = Color3.fromRGB(0, 100, 0)
+OnBtn.Text = "ON"
+OnBtn.TextColor3 = Color3.new(1, 1, 1)
+OnBtn.Font = Enum.Font.GothamBold
+Instance.new("UICorner", OnBtn)
+
+-- Botão OFF
+local OffBtn = Instance.new("TextButton", Main)
+OffBtn.Size = UDim2.new(0.4, 0, 0, 40)
+OffBtn.Position = UDim2.new(0.53, 0, 0.45, 0)
+OffBtn.BackgroundColor3 = Color3.fromRGB(100, 0, 0)
+OffBtn.Text = "OFF"
+OffBtn.TextColor3 = Color3.new(1, 1, 1)
+OffBtn.Font = Enum.Font.GothamBold
+Instance.new("UICorner", OffBtn)
+
+-- Eventos de Clique
+OnBtn.MouseButton1Click:Connect(function()
+    Hyper.Active = true
+    OnBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+    OffBtn.BackgroundColor3 = Color3.fromRGB(80, 0, 0)
+    createGhost()
 end)
 
-RunService.Heartbeat:Connect(function(dt)
+OffBtn.MouseButton1Click:Connect(function()
+    Hyper.Active = false
+    OnBtn.BackgroundColor3 = Color3.fromRGB(0, 80, 0)
+    OffBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 50)
+    cleanup()
+end)
+
+-- [ MOTOR DE FÍSICA ]
+RunService.Heartbeat:Connect(function()
     local char = LocalPlayer.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChild("Humanoid")
     
-    if Hyper.Active and root then
+    if Hyper.Active and root and hum then
         local t = tick()
+        local moveVelocity = hum.MoveDirection * hum.WalkSpeed
+        local desyncVelo = Vector3.new(math.sin(t * 14) * Hyper.Intensity, 0, math.cos(t * 14) * Hyper.Intensity)
         
-        -- Cálculo Trigonométrico para Desync e Orbitals
-        local veloX = math.sin(t * 12) * Hyper.Intensity
-        local veloZ = math.cos(t * 12) * Hyper.Intensity
-        state.currentVelo = state.currentVelo:Lerp(Vector3.new(veloX, 0, veloZ), 0.15)
+        state.currentVelo = state.currentVelo:Lerp(desyncVelo, Hyper.Smoothing)
+        local oldV = root.AssemblyLinearVelocity
         
-        root.AssemblyLinearVelocity = state.currentVelo
+        root.AssemblyLinearVelocity = state.currentVelo + moveVelocity
         
-        -- Atualização Dinâmica do Ghost e Anéis
         if state.ghostModel then
             local gRoot = state.ghostModel:FindFirstChild("HumanoidRootPart")
             if gRoot then
-                gRoot.CFrame = root.CFrame * CFrame.new(state.currentVelo * 0.05)
-                
-                -- Movimento dos Anéis Orbitais (Trigonometria Pura)
-                for i, dot in ipairs(state.orbitalParts) do
-                    local angle = (i / #state.orbitalParts) * math.pi * 2 + (t * Hyper.OrbitalSpeed)
-                    local x = math.cos(angle) * Hyper.OuterRadius
-                    local z = math.sin(angle) * Hyper.OuterRadius
-                    dot.CFrame = gRoot.CFrame * CFrame.new(x, -3, z)
-                end
+                gRoot.CFrame = root.CFrame * CFrame.new(state.currentVelo * Hyper.GhostOffset)
             end
         end
         
         RunService.RenderStepped:Wait()
-        root.AssemblyLinearVelocity = Vector3.new(0,0,0)
+        root.AssemblyLinearVelocity = oldV
     end
 end)

@@ -1,141 +1,150 @@
---[[
-    HYPER'S DESYNC - V11
-    Fins Educacionais: Estudo de renderização 2D e vetores de rede.
-    Otimização: SUNC 2026 (Madium)
-    Visual: Black & Cyan Industrial
+--[[ 
+    NETWORK FORENSICS V12 - UNIVERSAL & STABLE
+    Foco: Compatibilidade Total, Sincronia de Velocidade e Reset de CFrame.
 ]]
 
-local rs = game:GetService("RunService")
-local players = game:GetService("Players")
-local lp = players.LocalPlayer
-local camera = workspace.CurrentCamera
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 
-local Hyper = {
-    Active = false,
-    EspActive = false,
-    Intensity = 40,
-    TracerColor = Color3.fromRGB(0, 255, 255),
-    EnemyColor = Color3.fromRGB(255, 0, 0)
-}
+-- --- CONFIGURAÇÕES DE ENGENHARIA ---
+local UPDATE_RATE = 0.05 
+local MAX_POOL_SIZE = 180 
+local TRAIL_LIFETIME = 0.45
+local SMOOTHING_FACTOR = 0.2
 
-local cache = {
-    tracers = {},
-    ghostModel = nil
-}
+local TrailPool = {}
+local PlayerData = {}
+local accumulator = 0
 
--- [ SISTEMA DE TRACER (DRAWING API - STEALTH) ]
-local function createTracer()
-    local line = Drawing.new("Line")
-    line.Thickness = 1.5
-    line.Transparency = 0.8
-    line.Color = Hyper.TracerColor
-    return line
+-- Pasta para organização
+local DebugFolder = workspace:FindFirstChild("NetDebug") or Instance.new("Folder")
+DebugFolder.Name = "NetDebug"
+DebugFolder.Parent = workspace
+
+-- --- SISTEMA DE POOLING PROFISSIONAL (RESET TOTAL) ---
+local function getTrailPart()
+    for _, item in ipairs(TrailPool) do
+        if not item.Active then
+            item.Active = true
+            item.Life = TRAIL_LIFETIME
+            -- Reset Total de Propriedades
+            local p = item.Part
+            p.Size = Vector3.new(0.6, 0.6, 0.6)
+            p.Transparency = 0.6
+            p.Material = Enum.Material.Neon
+            p.Color = Color3.new(1, 1, 1) 
+            return p
+        end
+    end
+    
+    if #TrailPool < MAX_POOL_SIZE then
+        local p = Instance.new("Part")
+        p.Size = Vector3.new(0.6, 0.6, 0.6)
+        p.Anchored, p.CanCollide = true, false
+        p.Material = Enum.Material.Neon
+        p.Parent = DebugFolder
+        local newItem = {Part = p, Active = true, Life = TRAIL_LIFETIME}
+        table.insert(TrailPool, newItem)
+        return p
+    end
+    return nil
 end
 
-local function updateVisuals()
-    for _, p in ipairs(players:GetPlayers()) do
-        if p ~= lp and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-            local root = p.Character.HumanoidRootPart
-            local pos, onScreen = camera:WorldToViewportPoint(root.Position)
-            
-            if Hyper.EspActive and onScreen then
-                local tracer = cache.tracers[p] or createTracer()
-                cache.tracers[p] = tracer
-                tracer.Visible = true
-                tracer.From = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y)
-                tracer.To = Vector2.new(pos.X, pos.Y)
-            else
-                if cache.tracers[p] then cache.tracers[p].Visible = false end
+local function releaseTrail(item)
+    item.Active = false
+    item.Part.Transparency = 1
+    -- Move para longe para evitar glitches visuais
+    item.Part.CFrame = CFrame.new(0, -9999, 0)
+end
+
+local function updatePool(dt)
+    for _, item in ipairs(TrailPool) do
+        if item.Active then
+            item.Life = item.Life - dt
+            if item.Life <= 0 then
+                releaseTrail(item)
             end
-        else
-            if cache.tracers[p] then cache.tracers[p].Visible = false end
         end
     end
 end
 
--- [ INTERFACE HYPER'S DESYNC ]
-local GuiParent = (gethui and gethui()) or game:GetService("CoreGui")
-if GuiParent:FindFirstChild("HypersDesync") then GuiParent.HypersDesync:Destroy() end
+-- Limpeza de memória
+Players.PlayerRemoving:Connect(function(p) PlayerData[p] = nil end)
 
-local ScreenGui = Instance.new("ScreenGui", GuiParent)
-ScreenGui.Name = "HypersDesync"
-
-local Main = Instance.new("Frame", ScreenGui)
-Main.Size = UDim2.new(0, 220, 0, 180)
-Main.Position = UDim2.new(0.5, -110, 0.7, 0)
-Main.BackgroundColor3 = Color3.new(0,0,0)
-Main.Draggable, Main.Active = true, true
-Instance.new("UICorner", Main)
-Instance.new("UIStroke", Main).Color = Color3.fromRGB(80, 80, 80)
-
-local Title = Instance.new("TextLabel", Main)
-Title.Size = UDim2.new(1, 0, 0, 45)
-Title.Text = "HYPER'S DESYNC"
-Title.TextColor3 = Color3.new(1,1,1)
-Title.Font = Enum.Font.GothamBold
-Title.TextSize = 16
-Title.BackgroundTransparency = 1
-
-local OnBtn = Instance.new("TextButton", Main)
-OnBtn.Size = UDim2.new(0.4, 0, 0, 40)
-OnBtn.Position = UDim2.new(0.07, 0, 0.3, 0)
-OnBtn.Text = "DESYNC ON"
-OnBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-OnBtn.TextColor3 = Color3.new(1,1,1)
-OnBtn.Font = Enum.Font.GothamBold
-Instance.new("UICorner", OnBtn)
-
-local OffBtn = Instance.new("TextButton", Main)
-OffBtn.Size = UDim2.new(0.4, 0, 0, 40)
-OffBtn.Position = UDim2.new(0.53, 0, 0.3, 0)
-OffBtn.Text = "DESYNC OFF"
-OffBtn.BackgroundColor3 = Color3.fromRGB(60, 0, 0)
-OffBtn.TextColor3 = Color3.new(1,1,1)
-OffBtn.Font = Enum.Font.GothamBold
-Instance.new("UICorner", OffBtn)
-
-local EspBtn = Instance.new("TextButton", Main)
-EspBtn.Size = UDim2.new(0.86, 0, 0, 45)
-EspBtn.Position = UDim2.new(0.07, 0, 0.65, 0)
-EspBtn.Text = "TRACER & ESP: OFF"
-EspBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
-EspBtn.TextColor3 = Color3.new(1,1,1)
-EspBtn.Font = Enum.Font.GothamBold
-Instance.new("UICorner", EspBtn)
-
--- [ GATILHOS ]
-OnBtn.MouseButton1Click:Connect(function()
-    Hyper.Active = true
-    OnBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 80)
-    OffBtn.BackgroundColor3 = Color3.fromRGB(60, 0, 0)
-end)
-
-OffBtn.MouseButton1Click:Connect(function()
-    Hyper.Active = false
-    OnBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    OffBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
-    if raknet then pcall(function() raknet.remove_send_hook() end) end
-end)
-
-EspBtn.MouseButton1Click:Connect(function()
-    Hyper.EspActive = not Hyper.EspActive
-    EspBtn.Text = Hyper.EspActive and "TRACER & ESP: ON" or "TRACER & ESP: OFF"
-    EspBtn.BackgroundColor3 = Hyper.EspActive and Color3.fromRGB(0, 140, 200) or Color3.fromRGB(20, 20, 25)
-end)
-
--- [ LOOP PRINCIPAL ]
-rs.RenderStepped:Connect(function()
-    updateVisuals()
+-- --- LOOP DE ANÁLISE (COMPATIBILIDADE UNIVERSAL) ---
+RunService.Heartbeat:Connect(function(dt)
+    updatePool(dt)
     
-    local char = lp.Character
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    
-    if Hyper.Active and root then
-        local t = tick()
-        local velo = Vector3.new(math.sin(t*14)*Hyper.Intensity, 0, math.cos(t*14)*Hyper.Intensity)
-        root.AssemblyLinearVelocity = velo
-        
-        rs.Heartbeat:Wait()
-        root.AssemblyLinearVelocity = Vector3.new(0,0,0)
+    accumulator = accumulator + dt
+    if accumulator < UPDATE_RATE then return end
+    local tickDt = math.max(accumulator, 1e-4) 
+    accumulator = 0
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= Players.LocalPlayer and player.Character then
+            local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                -- Inicialização Segura
+                if not PlayerData[player] then
+                    PlayerData[player] = {
+                        lastPos = hrp.Position,
+                        lastVel = hrp.Velocity,
+                        smoothAccel = Vector3.new(0,0,0),
+                        errorScore = 0
+                    }
+                end
+
+                local data = PlayerData[player]
+                local currentPos = hrp.Position
+                local currentVel = hrp.Velocity
+
+                -- 1. Cálculo de Velocidade Blend e Aceleração
+                local measuredVel = (currentPos - data.lastPos) / tickDt
+                local blendedVel = (measuredVel + currentVel) * 0.5
+                local rawAccel = (blendedVel - data.lastVel) / tickDt
+                data.smoothAccel = (data.smoothAccel * (1 - SMOOTHING_FACTOR)) + (rawAccel * SMOOTHING_FACTOR)
+
+                -- 2. Predição Física
+                local predictedPos = data.lastPos + (blendedVel * tickDt) + (0.5 * data.smoothAccel * tickDt * tickDt)
+                local predictionError = (currentPos - predictedPos).Magnitude
+
+                -- 3. Lógica de Erro com Filtro de Teleporte (Sem 'continue' para ser Universal)
+                if predictionError > 80 then
+                    -- Reset por teleporte/respawn
+                    data.errorScore = 0
+                    data.lastPos = currentPos
+                    data.lastVel = currentVel
+                else
+                    -- Threshold Dinâmico e Score
+                    local dynamicThreshold = 6 + (currentVel.Magnitude * 0.08) + (data.smoothAccel.Magnitude * 0.02)
+                    
+                    if predictionError > dynamicThreshold then
+                        data.errorScore = math.min((data.errorScore or 0) + 1.6, 20)
+                    else
+                        data.errorScore = math.max(0, (data.errorScore or 0) - 0.5)
+                    end
+
+                    -- 4. Visualização
+                    local pPart = getTrailPart()
+                    if pPart then
+                        pPart.Color = Color3.new(0, 1, 1)
+                        pPart.CFrame = CFrame.new(predictedPos)
+                    end
+
+                    if data.errorScore > 5 then
+                        local rPart = getTrailPart()
+                        if rPart then
+                            rPart.Color = Color3.new(1, 0, 0)
+                            rPart.Size = Vector3.new(2.2, 2.2, 2.2)
+                            rPart.CFrame = CFrame.new(currentPos)
+                        end
+                    end
+
+                    -- Atualização de Estado (Consistente com o modelo físico)
+                    data.lastPos = currentPos
+                    data.lastVel = blendedVel
+                end
+            end
+        end
     end
 end)

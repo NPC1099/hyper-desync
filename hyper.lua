@@ -1,150 +1,168 @@
---[[ 
-    NETWORK FORENSICS V12 - UNIVERSAL & STABLE
-    Foco: Compatibilidade Total, Sincronia de Velocidade e Reset de CFrame.
+--[[
+    HYPER'S HUB V9 - RAKNET REAL DESYNC
+    Fuso: VFX Original + RakNet Packet Manipulation
+    Visual: Black Hub / ON-OFF System
 ]]
 
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
+local uis = game:GetService("UserInputService")
+local players = game:GetService("Players")
+local rs = game:GetService("RunService")
+local lp = players.LocalPlayer
 
--- --- CONFIGURAÇÕES DE ENGENHARIA ---
-local UPDATE_RATE = 0.05 
-local MAX_POOL_SIZE = 180 
-local TRAIL_LIFETIME = 0.45
-local SMOOTHING_FACTOR = 0.2
+-- Configurações Visuais Originais
+local PI2 = math.pi * 2
+local OUTER_RADIUS, INNER_RADIUS = 3.2, 1.8
+local OUTER_SPEED, INNER_SPEED = 2.5, -3.5
+local GROUND_OFFSET = 3.1
 
-local TrailPool = {}
-local PlayerData = {}
-local accumulator = 0
+local HyperState = {
+    Active = false,
+    GhostModel = nil,
+    GroundParts = {},
+    Attachments = {},
+    VfxConn = nil,
+    Hooked = false
+}
 
--- Pasta para organização
-local DebugFolder = workspace:FindFirstChild("NetDebug") or Instance.new("Folder")
-DebugFolder.Name = "NetDebug"
-DebugFolder.Parent = workspace
+-- [ FUNÇÕES AUXILIARES DE VFX ]
+local function cleanup()
+    if HyperState.VfxConn then HyperState.VfxConn:Disconnect(); HyperState.VfxConn = nil end
+    if HyperState.Hooked and raknet then raknet.remove_send_hook() end
+    for _, p in ipairs(HyperState.GroundParts) do if p.dot then p.dot:Destroy() end end
+    if HyperState.GhostModel then HyperState.GhostModel:Destroy(); HyperState.GhostModel = nil end
+    HyperState.GroundParts = {}
+    HyperState.Attachments = {}
+    HyperState.Hooked = false
+end
 
--- --- SISTEMA DE POOLING PROFISSIONAL (RESET TOTAL) ---
-local function getTrailPart()
-    for _, item in ipairs(TrailPool) do
-        if not item.Active then
-            item.Active = true
-            item.Life = TRAIL_LIFETIME
-            -- Reset Total de Propriedades
-            local p = item.Part
-            p.Size = Vector3.new(0.6, 0.6, 0.6)
-            p.Transparency = 0.6
-            p.Material = Enum.Material.Neon
-            p.Color = Color3.new(1, 1, 1) 
-            return p
+local function rakhook(packet)
+    if packet.PacketId == 0x1B and HyperState.Active then
+        local buf = packet.AsBuffer
+        buffer.writeu32(buf, 1, 0xFFFFFFFF)
+        packet:SetData(buf)
+    end
+end
+
+local function makeRingDot(pos, radius, angle, col)
+    local dot = Instance.new("Part")
+    dot.Anchored, dot.CanCollide = true, false
+    dot.Size = Vector3.new(0.2, 0.2, 0.2)
+    dot.Material = Enum.Material.Neon
+    dot.Color = col
+    dot.Parent = workspace
+    return dot
+end
+
+-- [ CRIAÇÃO DO DESYNC REAL ]
+local function startDesync()
+    cleanup()
+    local char = lp.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    local startPos = hrp.Position
+    char.Archivable = true
+    local ghost = char:Clone()
+    char.Archivable = false
+    
+    -- Configuração do Ghost (conforme seu script)
+    for _, v in ipairs(ghost:GetDescendants()) do
+        if v:IsA("BasePart") then
+            v.Anchored, v.CanCollide = true, false
+            v.Transparency = 0.5
+            v.Color = Color3.fromRGB(0, 40, 150)
+        elseif v:IsA("Script") or v:IsA("LocalScript") or v:IsA("Humanoid") then
+            v:Destroy()
         end
     end
     
-    if #TrailPool < MAX_POOL_SIZE then
-        local p = Instance.new("Part")
-        p.Size = Vector3.new(0.6, 0.6, 0.6)
-        p.Anchored, p.CanCollide = true, false
-        p.Material = Enum.Material.Neon
-        p.Parent = DebugFolder
-        local newItem = {Part = p, Active = true, Life = TRAIL_LIFETIME}
-        table.insert(TrailPool, newItem)
-        return p
-    end
-    return nil
-end
-
-local function releaseTrail(item)
-    item.Active = false
-    item.Part.Transparency = 1
-    -- Move para longe para evitar glitches visuais
-    item.Part.CFrame = CFrame.new(0, -9999, 0)
-end
-
-local function updatePool(dt)
-    for _, item in ipairs(TrailPool) do
-        if item.Active then
-            item.Life = item.Life - dt
-            if item.Life <= 0 then
-                releaseTrail(item)
-            end
-        end
-    end
-end
-
--- Limpeza de memória
-Players.PlayerRemoving:Connect(function(p) PlayerData[p] = nil end)
-
--- --- LOOP DE ANÁLISE (COMPATIBILIDADE UNIVERSAL) ---
-RunService.Heartbeat:Connect(function(dt)
-    updatePool(dt)
+    local hl = Instance.new("Highlight", ghost)
+    hl.FillColor = Color3.fromRGB(0, 100, 255)
+    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
     
-    accumulator = accumulator + dt
-    if accumulator < UPDATE_RATE then return end
-    local tickDt = math.max(accumulator, 1e-4) 
-    accumulator = 0
+    ghost:SetPrimaryPartCFrame(hrp.CFrame)
+    ghost.Parent = workspace
+    HyperState.GhostModel = ghost
 
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= Players.LocalPlayer and player.Character then
-            local hrp = player.Character:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                -- Inicialização Segura
-                if not PlayerData[player] then
-                    PlayerData[player] = {
-                        lastPos = hrp.Position,
-                        lastVel = hrp.Velocity,
-                        smoothAccel = Vector3.new(0,0,0),
-                        errorScore = 0
-                    }
-                end
-
-                local data = PlayerData[player]
-                local currentPos = hrp.Position
-                local currentVel = hrp.Velocity
-
-                -- 1. Cálculo de Velocidade Blend e Aceleração
-                local measuredVel = (currentPos - data.lastPos) / tickDt
-                local blendedVel = (measuredVel + currentVel) * 0.5
-                local rawAccel = (blendedVel - data.lastVel) / tickDt
-                data.smoothAccel = (data.smoothAccel * (1 - SMOOTHING_FACTOR)) + (rawAccel * SMOOTHING_FACTOR)
-
-                -- 2. Predição Física
-                local predictedPos = data.lastPos + (blendedVel * tickDt) + (0.5 * data.smoothAccel * tickDt * tickDt)
-                local predictionError = (currentPos - predictedPos).Magnitude
-
-                -- 3. Lógica de Erro com Filtro de Teleporte (Sem 'continue' para ser Universal)
-                if predictionError > 80 then
-                    -- Reset por teleporte/respawn
-                    data.errorScore = 0
-                    data.lastPos = currentPos
-                    data.lastVel = currentVel
-                else
-                    -- Threshold Dinâmico e Score
-                    local dynamicThreshold = 6 + (currentVel.Magnitude * 0.08) + (data.smoothAccel.Magnitude * 0.02)
-                    
-                    if predictionError > dynamicThreshold then
-                        data.errorScore = math.min((data.errorScore or 0) + 1.6, 20)
-                    else
-                        data.errorScore = math.max(0, (data.errorScore or 0) - 0.5)
-                    end
-
-                    -- 4. Visualização
-                    local pPart = getTrailPart()
-                    if pPart then
-                        pPart.Color = Color3.new(0, 1, 1)
-                        pPart.CFrame = CFrame.new(predictedPos)
-                    end
-
-                    if data.errorScore > 5 then
-                        local rPart = getTrailPart()
-                        if rPart then
-                            rPart.Color = Color3.new(1, 0, 0)
-                            rPart.Size = Vector3.new(2.2, 2.2, 2.2)
-                            rPart.CFrame = CFrame.new(currentPos)
-                        end
-                    end
-
-                    -- Atualização de Estado (Consistente com o modelo físico)
-                    data.lastPos = currentPos
-                    data.lastVel = blendedVel
-                end
-            end
-        end
+    -- Criar Anéis de Chão
+    for i = 1, 24 do
+        local a = (i/24) * PI2
+        table.insert(HyperState.GroundParts, {
+            dot = makeRingDot(startPos, OUTER_RADIUS, a, Color3.fromRGB(0, 150, 255)),
+            angle = a, isOuter = true
+        })
     end
+
+    -- Loop de Animação VFX
+    HyperState.VfxConn = rs.Heartbeat:Connect(function()
+        if not HyperState.Active then return end
+        local t = tick()
+        for _, p in ipairs(HyperState.GroundParts) do
+            local rad = p.isOuter and OUTER_RADIUS or INNER_RADIUS
+            local speed = p.isOuter and OUTER_SPEED or INNER_SPEED
+            local curA = p.angle + t * speed
+            p.dot.CFrame = CFrame.new(startPos.X + math.cos(curA) * rad, startPos.Y - GROUND_OFFSET, startPos.Z + math.sin(curA) * rad)
+        end
+    end)
+
+    if raknet then 
+        raknet.add_send_hook(rakhook)
+        HyperState.Hooked = true
+    end
+end
+
+-- [ INTERFACE HYPER'S HUB ]
+local GuiParent = (gethui and gethui()) or game:GetService("CoreGui")
+if GuiParent:FindFirstChild("HypersHubV9") then GuiParent.HypersHubV9:Destroy() end
+
+local ScreenGui = Instance.new("ScreenGui", GuiParent)
+ScreenGui.Name = "HypersHubV9"
+
+local Main = Instance.new("Frame", ScreenGui)
+Main.Size = UDim2.new(0, 200, 0, 140)
+Main.Position = UDim2.new(0.5, -100, 0.8, 0)
+Main.BackgroundColor3 = Color3.new(0,0,0)
+Main.Draggable = true
+Main.Active = true
+Instance.new("UICorner", Main)
+Instance.new("UIStroke", Main).Color = Color3.fromRGB(60,60,60)
+
+local Title = Instance.new("TextLabel", Main)
+Title.Size = UDim2.new(1, 0, 0, 45)
+Title.Text = "HYPER'S HUB"
+Title.TextColor3 = Color3.new(1,1,1)
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 18
+Title.BackgroundTransparency = 1
+
+local OnBtn = Instance.new("TextButton", Main)
+OnBtn.Size = UDim2.new(0.4, 0, 0, 45)
+OnBtn.Position = UDim2.new(0.07, 0, 0.5, 0)
+OnBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+OnBtn.Text = "ON"
+OnBtn.TextColor3 = Color3.new(1,1,1)
+OnBtn.Font = Enum.Font.GothamBold
+Instance.new("UICorner", OnBtn)
+
+local OffBtn = Instance.new("TextButton", Main)
+OffBtn.Size = UDim2.new(0.4, 0, 0, 45)
+OffBtn.Position = UDim2.new(0.53, 0, 0.5, 0)
+OffBtn.BackgroundColor3 = Color3.fromRGB(40, 0, 0)
+OffBtn.Text = "OFF"
+OffBtn.TextColor3 = Color3.new(1,1,1)
+OffBtn.Font = Enum.Font.GothamBold
+Instance.new("UICorner", OffBtn)
+
+OnBtn.MouseButton1Click:Connect(function()
+    HyperState.Active = true
+    OnBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 80)
+    OffBtn.BackgroundColor3 = Color3.fromRGB(40, 0, 0)
+    startDesync()
+end)
+
+OffBtn.MouseButton1Click:Connect(function()
+    HyperState.Active = false
+    OnBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    OffBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+    cleanup()
 end)
